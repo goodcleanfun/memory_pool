@@ -1,0 +1,16 @@
+{
+    "name": "memory_pool",
+    "version": "0.0.0",
+    "repo": "goodcleanfun/memory_pool",
+    "description": "Generic memory pool for fixed types using block allocation and a free list stored within the blocks themselves",
+    "keywords": ["memory", "memory pool", "block allocation", "free list"],
+    "license": "MIT",
+    "dependencies": {
+    },
+    "development": {
+      "silentbicycle/greatest": "*"
+    },
+    "src": [
+      "src/memory_pool.h"
+    ]
+  }
