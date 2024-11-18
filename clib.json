@@ -6,6 +6,7 @@
     "keywords": ["memory", "memory pool", "block allocation", "free list"],
     "license": "MIT",
     "dependencies": {
+      "goodcleanfun/aligned": "*"
     },
     "development": {
       "silentbicycle/greatest": "*"

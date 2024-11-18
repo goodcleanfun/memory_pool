@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include "aligned/aligned.h"
 
 #define DEFAULT_MEMORY_POOL_BLOCK_SIZE 256
 
@@ -17,6 +18,8 @@
 #ifndef MEMORY_POOL_TYPE
 #error "Must define MEMORY_POOL_TYPE" 
 #endif
+
+#define IS_POWER_OF_TWO(x) (((x) & ((x) - 1)) == 0)
 
 #define CONCAT_(a, b) a ## b
 #define CONCAT(a, b) CONCAT_(a, b)
@@ -45,9 +48,12 @@ typedef struct {
 } MEMORY_POOL_NAME;
 
 MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size) {
+    if (!IS_POWER_OF_TWO(block_size)) {
+        return NULL;
+    }
     MEMORY_POOL_NAME *pool = calloc(1, sizeof(MEMORY_POOL_NAME));
     if (pool == NULL) return NULL;
-    MEMORY_POOL_TYPED(block_t) *block = malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + block_size * sizeof(MEMORY_POOL_TYPE));
+    MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + block_size * sizeof(MEMORY_POOL_TYPE), block_size);
     if (block == NULL) {
         free(pool);
         return NULL;
@@ -87,7 +93,7 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
         return value;
     }
     if (pool->block_remaining == 0) {
-        MEMORY_POOL_TYPED(block_t) *block = malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE));
+        MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
         if (block == NULL) return NULL;
         block->next = pool->block;
         pool->block = block;
@@ -123,3 +129,5 @@ bool MEMORY_POOL_FUNC(release)(MEMORY_POOL_NAME *pool, MEMORY_POOL_TYPE *value) 
 #undef MEMORY_POOL_FUNC
 #undef MEMORY_POOL_TYPED
 #undef MEMORY_POOL_ARRAY_NAME
+#undef MEMORY_POOL_ARRAY_FUNC
+#undef IS_POWER_OF_TWO
