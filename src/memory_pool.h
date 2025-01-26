@@ -41,19 +41,20 @@ typedef struct MEMORY_POOL_TYPED(block) {
 
 typedef struct {
     size_t block_size;
+    size_t type_size;
     MEMORY_POOL_TYPED(block_t) *block;
     size_t block_remaining;
     size_t num_blocks;
     MEMORY_POOL_TYPED(item_t) *free_list;
 } MEMORY_POOL_NAME;
 
-MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size) {
+MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size) {
     if (!IS_POWER_OF_TWO(block_size)) {
         return NULL;
     }
     MEMORY_POOL_NAME *pool = calloc(1, sizeof(MEMORY_POOL_NAME));
     if (pool == NULL) return NULL;
-    MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + block_size * sizeof(MEMORY_POOL_TYPE), block_size);
+    MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + block_size * type_size, block_size);
     if (block == NULL) {
         free(pool);
         return NULL;
@@ -63,6 +64,7 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size) {
 
     pool->block = block;
     pool->block_remaining = block_size;
+    pool->type_size = type_size;
     pool->block_size = block_size;
     pool->num_blocks = 1;
 
@@ -70,7 +72,7 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size) {
 }
 
 MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new)(void) {
-    return MEMORY_POOL_FUNC(new_size)(DEFAULT_MEMORY_POOL_BLOCK_SIZE);
+    return MEMORY_POOL_FUNC(new_size)(DEFAULT_MEMORY_POOL_BLOCK_SIZE, sizeof(MEMORY_POOL_TYPE));
 }
 
 void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
