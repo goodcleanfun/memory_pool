@@ -111,15 +111,9 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
 bool MEMORY_POOL_FUNC(release)(MEMORY_POOL_NAME *pool, MEMORY_POOL_TYPE *value) {
     if (pool == NULL || value == NULL) return false;
     // Set the next pointer to the current head (which is a data pointer)
-    if (pool->free_list == NULL) {
-        // Keep the pointer to 
-        pool->free_list = (MEMORY_POOL_TYPED(item_t) *)value;
-        pool->free_list->next = NULL;
-    } else {
-        MEMORY_POOL_TYPED(item_t) *head = pool->free_list;
-        pool->free_list = (MEMORY_POOL_TYPED(item_t) *)value;
-        pool->free_list->next = head;
-    }
+    MEMORY_POOL_TYPED(item_t) *head = pool->free_list;
+    pool->free_list = (MEMORY_POOL_TYPED(item_t) *)value;
+    pool->free_list->next = head;
     return true;
 }
 
