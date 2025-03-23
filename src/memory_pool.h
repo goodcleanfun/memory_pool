@@ -68,6 +68,7 @@ typedef struct {
     // Use cheap non-exclusive read locks to get new nodes from the current block
     // Take exclusive write-lock only when adding a new block and resetting counter
     rwlock_t block_change_lock;
+    bool block_change_lock_initialized;
     #endif
 } MEMORY_POOL_NAME;
 
@@ -95,7 +96,13 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     #else
     pool->free_list = (MEMORY_POOL_TYPED(free_list_t)){.version = 0, .node = NULL};
     atomic_init(&pool->block_index, 0);
-    rwlock_init(&pool->block_change_lock, NULL);
+    pool->block_change_lock_initialized = false;
+    if (rwlock_init(&pool->block_change_lock, NULL) != thrd_success) {
+        free(block);
+        free(pool);
+        return NULL;
+    }
+    pool->block_change_lock_initialized = true;
     #endif
     return pool;
 }
@@ -107,7 +114,9 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new)(void) {
 void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
     if (pool == NULL) return;
     #ifdef MEMORY_POOL_THREAD_SAFE
-    rwlock_destroy(&pool->block_change_lock);
+    if (pool->block_change_lock_initialized) {
+        rwlock_destroy(&pool->block_change_lock);
+    }
     #endif
     MEMORY_POOL_TYPED(block_t) *block = pool->block;
     while(block != NULL) {
@@ -154,7 +163,7 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
     } while (!atomic_compare_exchange_weak(&pool->free_list, &head, new_head));
 
     if (head.node != NULL) {
-        value =  (MEMORY_POOL_TYPE *)head.node;
+        value = (MEMORY_POOL_TYPE *)head.node;
         return value;
     }
 
@@ -163,7 +172,9 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
     size_t index;
     while (!in_block) {
         // Take a non-exclusive read lock to make sure we're not in the middle of adding a block
-        rwlock_lock_shared(&pool->block_change_lock);
+        if (rwlock_lock_shared(&pool->block_change_lock) != thrd_success) {
+            return NULL;
+        }
         // This gets the current thread a unique index in the current block
         index = atomic_fetch_add(&pool->block_index, 1);
         rwlock_unlock_shared(&pool->block_change_lock);
@@ -187,7 +198,10 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
                     continue;
                 }
                 MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
-                if (block == NULL) return NULL;
+                if (block == NULL) {
+                    rwlock_unlock_exclusive(&pool->block_change_lock);
+                    return NULL;
+                }
                 block->next = pool->block;
                 pool->block = block;
                 pool->num_blocks++;
