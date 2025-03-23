@@ -99,4 +99,4 @@ jobs:
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps/aligned/aligned.h
       - name: Build and Test with MinGW
         run: |
-          make CC=gcc CFLAGS="-std=c11" LDFLAGS="-latomic" test
+          make CC=gcc CFLAGS="-std=gnu11" LDFLAGS="-latomic" test
