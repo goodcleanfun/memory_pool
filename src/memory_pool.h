@@ -98,7 +98,7 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     atomic_init(&pool->block_index, 0);
     pool->block_change_lock_initialized = false;
     if (rwlock_init(&pool->block_change_lock, NULL) != thrd_success) {
-        free(block);
+        aligned_free(block);
         free(pool);
         return NULL;
     }
@@ -121,7 +121,7 @@ void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
     MEMORY_POOL_TYPED(block_t) *block = pool->block;
     while(block != NULL) {
         MEMORY_POOL_TYPED(block_t) *next = block->next;
-        free(block);
+        aligned_free(block);
         block = next;        
     }
     free(pool);
