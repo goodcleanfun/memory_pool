@@ -171,26 +171,28 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
 
     size_t index;
     while (!in_block) {
-        // Take a non-exclusive read lock to make sure we're not in the middle of adding a block
-        if (rwlock_lock_shared(&pool->block_change_lock) != thrd_success) {
-            return NULL;
-        }
         // This gets the current thread a unique index in the current block
         index = atomic_fetch_add(&pool->block_index, 1);
-        rwlock_unlock_shared(&pool->block_change_lock);
 
         in_block = index < pool->block_size;
         if (in_block) {
+            /* Take a non-exclusive read lock to make sure that if we got a block index,
+             * we're not in the middle of changing the current block
+            */
+            if (rwlock_lock_shared(&pool->block_change_lock) != thrd_success) {
+                return NULL;
+            }
             value = pool->block->data + index;
+            rwlock_unlock_shared(&pool->block_change_lock);
         } else {
-            /*  If the counter has gone beyond the block size, we need a new block.
-             ** Take a write lock to make sure only one thread grows the pool.
-             ** Whoever gets the exclusive lock first is responsible for allocating
-             ** the new block and connecting it to the block list.
-             */
+            /* If the counter has gone beyond the block size, we need a new block.
+             * Take a write lock to make sure only one thread grows the pool.
+             * Whoever gets the exclusive lock first is responsible for allocating
+             * the new block and connecting it to the block list.
+            */
             if (rwlock_try_lock_exclusive(&pool->block_change_lock) != thrd_busy) {
                 /* Check if another thread that was waiting with a high index has already added a new block
-                ** if this is the case, the block index is already reset and we can proceed
+                 * if this is the case, the block index is already reset and we can proceed
                 */
                 if (atomic_load(&pool->block_index) < pool->block_size) {
                     rwlock_unlock_exclusive(&pool->block_change_lock);
