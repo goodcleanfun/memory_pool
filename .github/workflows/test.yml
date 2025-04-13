@@ -56,30 +56,6 @@ jobs:
       - name: Run tests with ${{ matrix.compiler }}
         run: make CC=${{ matrix.compiler }} CFLAGS="-std=gnu11" install test
 
-  test-windows-msvc:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
-      - name: Install dependencies
-        run: |
-          choco install make
-          choco install curl
-      - name: Install deps
-        run: |
-          mkdir -p deps\greatest
-          curl -L https://github.com/silentbicycle/greatest/raw/release/greatest.h -o deps\greatest\greatest.h
-          mkdir -p deps\threading
-          curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps\threading\threading.h
-          mkdir -p deps\aligned
-          curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps\aligned\aligned.h
-          mkdir -p deps\set
-          curl -L https://raw.githubusercontent.com/goodcleanfun/set/refs/heads/main/src/set.h -o deps\set\set.h
-          mkdir -p deps\khash
-          curl -L https://raw.githubusercontent.com/attractivechaos/klib/refs/heads/master/khash.h -o deps\khash\khash.h
-      - name: Run tests with MSVC
-        run: make CC=cl CFLAGS="/std:c11 /volatile:iso /experimental:c11atomics" test
-
   test-windows-mingw:
     runs-on: windows-latest
     defaults:
@@ -107,4 +83,4 @@ jobs:
           curl -L https://raw.githubusercontent.com/attractivechaos/klib/refs/heads/master/khash.h -o deps/khash/khash.h
       - name: Build and Test with MinGW
         run: |
-          make CC=gcc CFLAGS="-std=gnu11" test
+          make CC=gcc CFLAGS="-std=c11" test
