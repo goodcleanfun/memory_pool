@@ -10,7 +10,8 @@
       "goodcleanfun/threading": "*"
     },
     "development": {
-      "silentbicycle/greatest": "*"
+      "silentbicycle/greatest": "*",
+      "goodcleanfun/set": "*"
     },
     "src": [
       "src/memory_pool.h"

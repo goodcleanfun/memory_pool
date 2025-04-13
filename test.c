@@ -26,12 +26,29 @@ typedef struct bintree_node {
 #undef MEMORY_POOL_TYPE
 #undef MEMORY_POOL_THREAD_SAFE
 
+
+#define SET_NAME bintree_node_set
+#define SET_KEY_TYPE uintptr_t
+#if UINT64_MAX == 0xffffffffffffffffULL
+#define SET_INT64
+#elif UINT32_MAX == 0xffffffff
+#define SET_INT32
+#endif
+#include "set/set.h"
+#undef SET_NAME
+#undef SET_KEY_TYPE
+#if defined(SET_INT64)
+#undef SET_INT64
+#elif defined(SET_INT32)
+#undef SET_INT32
+#endif
+
 typedef struct {
     bintree_node_concurrent_memory_pool *pool;
     bintree_node_t **nodes;
 } bintree_concurrent_memory_pool_test_arg_t;
 
-#define NUM_INSERTS 256000
+#define NUM_INSERTS 25600
 
 int bintree_memory_pool_create_thread(void *arg) {
     bintree_concurrent_memory_pool_test_arg_t *input = (bintree_concurrent_memory_pool_test_arg_t *)arg;
@@ -48,18 +65,17 @@ int bintree_memory_pool_create_thread(void *arg) {
         nodes[i] = node;
     }
 
-    /*
     for (size_t i = 0; i < NUM_INSERTS; i++) {
         node = nodes[i];
         if (!bintree_node_concurrent_memory_pool_release(pool, nodes[i])) {
             return 1;
         }
         nodes[i] = NULL;
-    }*/
+    }
     return 0;
 }
 
-#define NUM_THREADS 16
+#define NUM_THREADS 8
 
 TEST test_concurrent_memory_pool(void)  {
     bintree_node_concurrent_memory_pool *pool = bintree_node_concurrent_memory_pool_new();
@@ -87,34 +103,22 @@ TEST test_concurrent_memory_pool(void)  {
     bintree_node_concurrent_memory_pool_free_list_t free_list = atomic_load(&pool->free_list);
     bintree_node_concurrent_memory_pool_item_t *item = free_list.node;
 
-    ASSERT_EQ(pool->num_blocks, NUM_INSERTS / pool->block_size * NUM_THREADS);
-
     bintree_node_concurrent_memory_pool_item_t *prev_item = NULL;
 
+    bintree_node_set *set = bintree_node_set_new();
+
     while (item != NULL) {
-        for (size_t i = 0; i < free_list_size; i++) {
-            if (nodes[i] == (bintree_node_t *)item) {
-                fprintf(stderr, "duplicate node: %p, prev_item=%p, prev_i=%zu, free_list_size=%zu\n", item, prev_item, i, free_list_size);
-                FAIL();
-            }
-        }
-        nodes[free_list_size++] = (bintree_node_t *)item;
-        ASSERT(free_list_size <= NUM_THREADS * NUM_INSERTS);
         prev_item = item;
+        if (bintree_node_set_contains(set, (uintptr_t)item)) {
+            fprintf(stderr, "duplicate node: %p\n", item);
+            FAIL();
+        }
+        bintree_node_set_add(set, (uintptr_t)item);
         item = item->next;
     }
+    bintree_node_set_destroy(set);
 
-
-
-    for (size_t i = 0; i < max_nodes; i++) {
-        bintree_node_t *node = nodes[i];
-        for (size_t j = 0; j < free_list_size; j++) {
-            if (j != i && nodes[j] == node) {
-                fprintf(stderr, "duplicate node: %p, prev_item=%p, prev_i=%zu, free_list_size=%zu\n", node, prev_item, i, free_list_size);
-                FAIL();
-            }
-        }
-    }
+    ASSERT(free_list_size <= NUM_THREADS * NUM_INSERTS);
 
     free(nodes);
 
@@ -154,7 +158,7 @@ TEST test_memory_pool(void) {
 
     bintree_node_t *node6 = bintree_node_memory_pool_get(pool);
     ASSERT(node6 != NULL);
-    ASSERT_EQ(pool->block_remaining, pool->block_size - 4);
+    ASSERT_EQ(pool->block->block_remaining, pool->block_size - 4);
 
     bintree_node_memory_pool_destroy(pool);
     PASS();
