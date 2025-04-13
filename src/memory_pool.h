@@ -50,6 +50,11 @@ typedef struct MEMORY_POOL_TYPED(free_list) {
 
 typedef struct MEMORY_POOL_TYPED(block) {
     struct MEMORY_POOL_TYPED(block) *next;
+    #ifndef MEMORY_POOL_THREAD_SAFE
+    size_t block_remaining;
+    #else
+    atomic_size_t block_index;
+    #endif
     MEMORY_POOL_TYPE data[];
 } MEMORY_POOL_TYPED(block_t);
 
@@ -57,17 +62,17 @@ typedef struct {
     size_t num_blocks;
     size_t block_size;
     size_t type_size;
-    MEMORY_POOL_TYPED(block_t) *block;
     #ifndef MEMORY_POOL_THREAD_SAFE
+    MEMORY_POOL_TYPED(block_t) *block;
     size_t block_remaining;
     MEMORY_POOL_TYPED(item_t) *free_list;
     #else
-    atomic_size_t block_index;
+    _Atomic(MEMORY_POOL_TYPED(block_t) *) block;
     // Uses double compare-and-swap with a version counter to avoid the ABA problem
     _Atomic MEMORY_POOL_TYPED(free_list_t) free_list;
     // Use cheap non-exclusive read locks to get new nodes from the current block
     // Take exclusive write-lock only when adding a new block and resetting counter
-    rwlock_t block_change_lock;
+    mtx_t block_change_lock;
     bool block_change_lock_initialized;
     #endif
 } MEMORY_POOL_NAME;
@@ -84,8 +89,14 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
         return NULL;
     }
     block->next = NULL;
-
+    #ifndef MEMORY_POOL_THREAD_SAFE
+    block->block_remaining = block_size;
     pool->block = block;
+    #else
+    atomic_init(&block->block_index, 0);
+    atomic_init(&pool->block, block);
+    #endif
+
     pool->type_size = type_size;
     pool->block_size = block_size;
     pool->num_blocks = 1;
@@ -94,10 +105,10 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     pool->free_list = NULL;
     pool->block_remaining = block_size;
     #else
-    pool->free_list = (MEMORY_POOL_TYPED(free_list_t)){.version = 0, .node = NULL};
-    atomic_init(&pool->block_index, 0);
+    MEMORY_POOL_TYPED(free_list_t) free_list = (MEMORY_POOL_TYPED(free_list_t)){.version = 0, .node = NULL};
+    atomic_init(&pool->free_list, free_list);
     pool->block_change_lock_initialized = false;
-    if (rwlock_init(&pool->block_change_lock, NULL) != thrd_success) {
+    if (mtx_init(&pool->block_change_lock, mtx_plain) != thrd_success) {
         aligned_free(block);
         free(pool);
         return NULL;
@@ -115,10 +126,12 @@ void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
     if (pool == NULL) return;
     #ifdef MEMORY_POOL_THREAD_SAFE
     if (pool->block_change_lock_initialized) {
-        rwlock_destroy(&pool->block_change_lock);
+        mtx_destroy(&pool->block_change_lock);
     }
-    #endif
+    MEMORY_POOL_TYPED(block_t) *block = atomic_load(&pool->block);
+    #else
     MEMORY_POOL_TYPED(block_t) *block = pool->block;
+    #endif
     while(block != NULL) {
         MEMORY_POOL_TYPED(block_t) *next = block->next;
         aligned_free(block);
@@ -136,17 +149,17 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
         pool->free_list = head->next;
         return value;
     }
-    if (pool->block_remaining == 0) {
+    if (pool->block->block_remaining == 0) {
         MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
         if (block == NULL) return NULL;
         block->next = pool->block;
+        block->block_remaining = pool->block_size;
         pool->block = block;
         pool->num_blocks++;
-        pool->block_remaining = pool->block_size;
     }
 
-    MEMORY_POOL_TYPE *value = pool->block->data + (pool->block_size - pool->block_remaining);
-    pool->block_remaining--;
+    MEMORY_POOL_TYPE *value = pool->block->data + (pool->block_size - pool->block->block_remaining);
+    pool->block->block_remaining--;
     return value;
     #else
     MEMORY_POOL_TYPED(free_list_t) head, new_head;
@@ -171,47 +184,45 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
 
     size_t index;
     while (!in_block) {
+        MEMORY_POOL_TYPED(block_t) *block = atomic_load(&pool->block);
         // This gets the current thread a unique index in the current block
-        index = atomic_fetch_add(&pool->block_index, 1);
+        index = atomic_fetch_add(&block->block_index, 1);
 
         in_block = index < pool->block_size;
         if (in_block) {
             /* Take a non-exclusive read lock to make sure that if we got a block index,
              * we're not in the middle of changing the current block
             */
-            if (rwlock_lock_shared(&pool->block_change_lock) != thrd_success) {
-                return NULL;
-            }
-            value = pool->block->data + index;
-            rwlock_unlock_shared(&pool->block_change_lock);
+            value = block->data + index;
         } else {
             /* If the counter has gone beyond the block size, we need a new block.
-             * Take a write lock to make sure only one thread grows the pool.
-             * Whoever gets the exclusive lock first is responsible for allocating
-             * the new block and connecting it to the block list.
+             * Try to hold the mutex to make sure only one thread grows the pool at a time.
+             * Whoever gets the lock first is responsible for allocating the new block and
+             * connecting it to the block list.
             */
-            if (rwlock_try_lock_exclusive(&pool->block_change_lock) != thrd_busy) {
-                /* Check if another thread that was waiting with a high index has already added a new block
-                 * if this is the case, the block index is already reset and we can proceed
+            if (mtx_trylock(&pool->block_change_lock) != thrd_busy) {
+                /* Check if another thread has already added a new block
+                 * if this is the case, the current block is already reset and we can proceed
+                 * to the next iteration and try with the new block's counter.
                 */
-                if (atomic_load(&pool->block_index) < pool->block_size) {
-                    rwlock_unlock_exclusive(&pool->block_change_lock);
-                    thrd_yield();
+                block = atomic_load(&pool->block);
+                if (atomic_load(&block->block_index) < pool->block_size) {
+                    mtx_unlock(&pool->block_change_lock);
                     continue;
                 }
-                MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
-                if (block == NULL) {
-                    rwlock_unlock_exclusive(&pool->block_change_lock);
+                MEMORY_POOL_TYPED(block_t) *new_block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
+                if (new_block == NULL) {
+                    mtx_unlock(&pool->block_change_lock);
                     return NULL;
                 }
-                block->next = pool->block;
-                pool->block = block;
-                pool->num_blocks++;
                 // Claim the zeroth index for this thread and store 1 in the block index
+                atomic_init(&new_block->block_index, 1);
                 index = 0;
-                value = pool->block->data;
-                atomic_store(&pool->block_index, 1);
-                rwlock_unlock_exclusive(&pool->block_change_lock);
+                new_block->next = block;
+                pool->num_blocks++;
+                atomic_store(&pool->block, new_block);
+                value = new_block->data;
+                mtx_unlock(&pool->block_change_lock);
                 break;
             }
         }
