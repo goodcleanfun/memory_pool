@@ -83,4 +83,4 @@ jobs:
           curl -L https://raw.githubusercontent.com/attractivechaos/klib/refs/heads/master/khash.h -o deps/khash/khash.h
       - name: Build and Test with MinGW
         run: |
-          make CC=gcc CFLAGS="-std=c11" test
+          make CC=gcc CFLAGS="-std=c11" LDFLAGS="-latomic" test
