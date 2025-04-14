@@ -1,6 +1,6 @@
 {
     "name": "memory_pool",
-    "version": "0.3.2",
+    "version": "0.4.0",
     "repo": "goodcleanfun/memory_pool",
     "description": "Generic memory pool for fixed types using block allocation and a free list stored within the blocks themselves. Includes concurrent version.",
     "keywords": ["memory", "memory pool", "block allocation", "free list"],
