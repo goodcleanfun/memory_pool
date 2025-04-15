@@ -64,7 +64,6 @@ typedef struct {
     size_t type_size;
     #ifndef MEMORY_POOL_THREAD_SAFE
     MEMORY_POOL_TYPED(block_t) *block;
-    size_t block_remaining;
     MEMORY_POOL_TYPED(item_t) *free_list;
     #else
     _Atomic(MEMORY_POOL_TYPED(block_t) *) block;
@@ -103,7 +102,6 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
 
     #ifndef MEMORY_POOL_THREAD_SAFE
     pool->free_list = NULL;
-    pool->block_remaining = block_size;
     #else
     MEMORY_POOL_TYPED(free_list_t) free_list = (MEMORY_POOL_TYPED(free_list_t)){.version = 0, .node = NULL};
     atomic_init(&pool->free_list, free_list);
