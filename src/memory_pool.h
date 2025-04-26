@@ -188,9 +188,6 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
 
         in_block = index < pool->block_size;
         if (in_block) {
-            /* Take a non-exclusive read lock to make sure that if we got a block index,
-             * we're not in the middle of changing the current block
-            */
             value = block->data + index;
         } else {
             /* If the counter has gone beyond the block size, we need a new block.
