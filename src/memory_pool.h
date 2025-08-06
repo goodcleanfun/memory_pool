@@ -21,6 +21,7 @@
 
 #ifdef MEMORY_POOL_THREAD_SAFE
 #include <stdatomic.h>
+#include "spinlock/spinlock.h"
 #include "threading/threading.h"
 #endif
 
@@ -69,10 +70,7 @@ typedef struct {
     _Atomic(MEMORY_POOL_TYPED(block_t) *) block;
     // Uses double compare-and-swap with a version counter to avoid the ABA problem
     _Atomic MEMORY_POOL_TYPED(free_list_t) free_list;
-    // Use cheap non-exclusive read locks to get new nodes from the current block
-    // Take exclusive write-lock only when adding a new block and resetting counter
-    mtx_t block_change_lock;
-    bool block_change_lock_initialized;
+    spinlock_t block_change_lock;
     #endif
 } MEMORY_POOL_NAME;
 
@@ -105,14 +103,9 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     #else
     MEMORY_POOL_TYPED(free_list_t) free_list = (MEMORY_POOL_TYPED(free_list_t)){.version = 0, .node = NULL};
     atomic_init(&pool->free_list, free_list);
-    pool->block_change_lock_initialized = false;
-    if (mtx_init(&pool->block_change_lock, mtx_plain) != thrd_success) {
-        aligned_free(block);
-        free(pool);
-        return NULL;
-    }
-    pool->block_change_lock_initialized = true;
+    spinlock_init(&pool->block_change_lock);
     #endif
+
     return pool;
 }
 
@@ -123,9 +116,6 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new)(void) {
 void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
     if (pool == NULL) return;
     #ifdef MEMORY_POOL_THREAD_SAFE
-    if (pool->block_change_lock_initialized) {
-        mtx_destroy(&pool->block_change_lock);
-    }
     MEMORY_POOL_TYPED(block_t) *block = atomic_load(&pool->block);
     #else
     MEMORY_POOL_TYPED(block_t) *block = pool->block;
@@ -191,23 +181,23 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
             value = block->data + index;
         } else {
             /* If the counter has gone beyond the block size, we need a new block.
-             * Try to hold the mutex to make sure only one thread grows the pool at a time.
+             * Try to hold the spinlock to make sure only one thread grows the pool at a time.
              * Whoever gets the lock first is responsible for allocating the new block and
              * connecting it to the block list.
             */
-            if (mtx_trylock(&pool->block_change_lock) != thrd_busy) {
+            if (spinlock_trylock(&pool->block_change_lock)) {
                 /* Check if another thread has already added a new block
                  * if this is the case, the current block is already reset and we can proceed
                  * to the next iteration and try with the new block's counter.
                 */
                 block = atomic_load(&pool->block);
                 if (atomic_load(&block->block_index) < pool->block_size) {
-                    mtx_unlock(&pool->block_change_lock);
+                    spinlock_unlock(&pool->block_change_lock);
                     continue;
                 }
                 MEMORY_POOL_TYPED(block_t) *new_block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
                 if (new_block == NULL) {
-                    mtx_unlock(&pool->block_change_lock);
+                    spinlock_unlock(&pool->block_change_lock);
                     return NULL;
                 }
                 // Claim the zeroth index for this thread and store 1 in the block index
@@ -217,7 +207,7 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
                 pool->num_blocks++;
                 atomic_store(&pool->block, new_block);
                 value = new_block->data;
-                mtx_unlock(&pool->block_change_lock);
+                spinlock_unlock(&pool->block_change_lock);
                 break;
             }
         }
