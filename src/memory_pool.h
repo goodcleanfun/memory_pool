@@ -7,7 +7,12 @@
 #include <string.h>
 #include "aligned/aligned.h"
 
+// Set default block size to roughly 4kb (OS page size) depending on the pointer size
+#if ((UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu))
+#define DEFAULT_MEMORY_POOL_BLOCK_SIZE 512
+#else
 #define DEFAULT_MEMORY_POOL_BLOCK_SIZE 256
+#endif
 
 #endif // MEMORY_POOL_H
 
