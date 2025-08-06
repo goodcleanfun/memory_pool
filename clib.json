@@ -7,7 +7,8 @@
     "license": "MIT",
     "dependencies": {
       "goodcleanfun/aligned": "*",
-      "goodcleanfun/threading": "*"
+      "goodcleanfun/threading": "*",
+      "goodcleanfun/spinlock": "*"
     },
     "development": {
       "silentbicycle/greatest": "*",
