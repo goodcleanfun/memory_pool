@@ -77,6 +77,10 @@ jobs:
           curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps/threading/threading.h
           mkdir -p deps/aligned
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps/aligned/aligned.h
+          mkdir -p deps/cpu_relax
+          curl -L https://raw.githubusercontent.com/goodcleanfun/cpu_relax/refs/heads/main/src/cpu_relax.h -o deps/cpu_relax/cpu_relax.h
+          mkdir -p deps/spinlock
+          curl -L https://raw.githubusercontent.com/goodcleanfun/spinlock/refs/heads/main/src/spinlock.h -o deps/spinlock/spinlock.h
           mkdir -p deps/set
           curl -L https://raw.githubusercontent.com/goodcleanfun/set/refs/heads/main/src/set.h -o deps/set/set.h
           mkdir -p deps/khash
