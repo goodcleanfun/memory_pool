@@ -169,12 +169,16 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
     }
 
     bool in_block = false;
+    bool need_new_index = true;
 
     size_t index;
     while (!in_block) {
         MEMORY_POOL_TYPED(block_t) *block = atomic_load(&pool->block);
         // This gets the current thread a unique index in the current block
-        index = atomic_fetch_add(&block->block_index, 1);
+        if (need_new_index) {
+            index = atomic_fetch_add(&block->block_index, 1);
+            need_new_index = false;
+        }
 
         in_block = index < pool->block_size;
         if (in_block) {
@@ -193,6 +197,7 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
                 block = atomic_load(&pool->block);
                 if (atomic_load(&block->block_index) < pool->block_size) {
                     spinlock_unlock(&pool->block_change_lock);
+                    need_new_index = true;
                     continue;
                 }
                 MEMORY_POOL_TYPED(block_t) *new_block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
