@@ -24,6 +24,32 @@
 #error "Must define MEMORY_POOL_TYPE" 
 #endif
 
+#ifndef MEMORY_POOL_MALLOC
+#define MEMORY_POOL_MALLOC(size) malloc(size)
+#define MEMORY_POOL_MALLOC_DEFINED
+#endif
+#ifndef MEMORY_POOL_CALLOC
+#define MEMORY_POOL_CALLOC(num, size) calloc(num, size)
+#define MEMORY_POOL_CALLOC_DEFINED
+#endif
+#ifndef MEMORY_POOL_FREE
+#define MEMORY_POOL_FREE(ptr) free(ptr)
+#define MEMORY_POOL_FREE_DEFINED
+#endif
+#ifndef MEMORY_POOL_ALIGNED_MALLOC
+#define MEMORY_POOL_ALIGNED_MALLOC(size, alignment) aligned_malloc(size, alignment)
+#define MEMORY_POOL_ALIGNED_MALLOC_DEFINED
+#endif
+#ifndef MEMORY_POOL_ALIGNED_FREE
+#define MEMORY_POOL_ALIGNED_FREE(ptr) aligned_free(ptr)
+#define MEMORY_POOL_ALIGNED_FREE_DEFINED
+#endif
+
+#ifndef MEMORY_POOL_ALIGNMENT
+#define MEMORY_POOL_ALIGNMENT CACHE_LINE_SIZE
+#define MEMORY_POOL_ALIGNMENT_DEFINED
+#endif
+
 #ifdef MEMORY_POOL_THREAD_SAFE
 #include <stdatomic.h>
 #include "spinlock/spinlock.h"
@@ -61,7 +87,7 @@ typedef struct MEMORY_POOL_TYPED(block) {
     #else
     atomic_size_t block_index;
     #endif
-    MEMORY_POOL_TYPE data[];
+    MEMORY_POOL_TYPE *data;
 } MEMORY_POOL_TYPED(block_t);
 
 typedef struct {
@@ -85,11 +111,20 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     }
     MEMORY_POOL_NAME *pool = calloc(1, sizeof(MEMORY_POOL_NAME));
     if (pool == NULL) return NULL;
-    MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + block_size * type_size, block_size);
+
+    MEMORY_POOL_TYPED(block_t) *block = MEMORY_POOL_MALLOC(sizeof(MEMORY_POOL_TYPED(block_t)));
     if (block == NULL) {
         free(pool);
         return NULL;
     }
+
+    block->data = (MEMORY_POOL_TYPE *) MEMORY_POOL_ALIGNED_MALLOC(block_size * type_size, MEMORY_POOL_ALIGNMENT);
+    if (block->data == NULL) {
+        MEMORY_POOL_FREE(block);
+        free(pool);
+        return NULL;
+    }
+
     block->next = NULL;
     #ifndef MEMORY_POOL_THREAD_SAFE
     block->block_remaining = block_size;
@@ -127,10 +162,11 @@ void MEMORY_POOL_FUNC(destroy)(MEMORY_POOL_NAME *pool) {
     #endif
     while(block != NULL) {
         MEMORY_POOL_TYPED(block_t) *next = block->next;
-        aligned_free(block);
-        block = next;        
+        MEMORY_POOL_ALIGNED_FREE(block->data);
+        MEMORY_POOL_FREE(block);
+        block = next;
     }
-    free(pool);
+    MEMORY_POOL_FREE(pool);
 }
 
 MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
@@ -143,8 +179,13 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
         return value;
     }
     if (pool->block->block_remaining == 0) {
-        MEMORY_POOL_TYPED(block_t) *block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
+        MEMORY_POOL_TYPED(block_t) *block = MEMORY_POOL_MALLOC(sizeof(MEMORY_POOL_TYPED(block_t)));
         if (block == NULL) return NULL;
+        block->data = (MEMORY_POOL_TYPE *) MEMORY_POOL_ALIGNED_MALLOC(pool->block_size * sizeof(MEMORY_POOL_TYPE), MEMORY_POOL_ALIGNMENT);
+        if (block->data == NULL) {
+            MEMORY_POOL_FREE(block);
+            return NULL;
+        }
         block->next = pool->block;
         block->block_remaining = pool->block_size;
         pool->block = block;
@@ -205,8 +246,14 @@ MEMORY_POOL_TYPE *MEMORY_POOL_FUNC(get)(MEMORY_POOL_NAME *pool) {
                     need_new_index = true;
                     continue;
                 }
-                MEMORY_POOL_TYPED(block_t) *new_block = aligned_malloc(sizeof(MEMORY_POOL_TYPED(block_t)) + pool->block_size * sizeof(MEMORY_POOL_TYPE), pool->block_size);
+                MEMORY_POOL_TYPED(block_t) *new_block = MEMORY_POOL_MALLOC(sizeof(MEMORY_POOL_TYPED(block_t)));
                 if (new_block == NULL) {
+                    spinlock_unlock(&pool->block_change_lock);
+                    return NULL;
+                }
+                new_block->data = (MEMORY_POOL_TYPE *) MEMORY_POOL_ALIGNED_MALLOC(pool->block_size * sizeof(MEMORY_POOL_TYPE), MEMORY_POOL_ALIGNMENT);
+                if (new_block->data == NULL) {
+                    MEMORY_POOL_FREE(new_block);
                     spinlock_unlock(&pool->block_change_lock);
                     return NULL;
                 }
@@ -260,3 +307,19 @@ bool MEMORY_POOL_FUNC(release)(MEMORY_POOL_NAME *pool, MEMORY_POOL_TYPE *value) 
 #undef MEMORY_POOL_ARRAY_NAME
 #undef MEMORY_POOL_ARRAY_FUNC
 #undef IS_POWER_OF_TWO
+#ifdef MEMORY_POOL_MALLOC_DEFINED
+#undef MEMORY_POOL_MALLOC
+#undef MEMORY_POOL_MALLOC_DEFINED
+#endif
+#ifdef MEMORY_POOL_CALLOC_DEFINED
+#undef MEMORY_POOL_CALLOC
+#undef MEMORY_POOL_CALLOC_DEFINED
+#endif
+#ifdef MEMORY_POOL_FREE_DEFINED
+#undef MEMORY_POOL_FREE
+#undef MEMORY_POOL_FREE_DEFINED
+#endif
+#ifdef MEMORY_POOL_ALIGNED_MALLOC_DEFINED
+#undef MEMORY_POOL_ALIGNED_MALLOC
+#undef MEMORY_POOL_ALIGNED_MALLOC_DEFINED
+#endif
