@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "aligned/aligned.h"
+#include "bit_utils/bit_utils.h"
 
 // Set default block size to roughly 4kb (OS page size) depending on the pointer size
 #if ((UINTPTR_MAX == 0xFFFFFFFFFFFFFFFFu))
@@ -56,8 +57,6 @@
 #include "threading/threading.h"
 #endif
 
-#define IS_POWER_OF_TWO(x) (((x) & ((x) - 1)) == 0)
-
 #define CONCAT_(a, b) a ## b
 #define CONCAT(a, b) CONCAT_(a, b)
 #define CONCAT3_(a, b, c) a ## b ## c
@@ -106,7 +105,7 @@ typedef struct {
 } MEMORY_POOL_NAME;
 
 MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size) {
-    if (!IS_POWER_OF_TWO(block_size)) {
+    if (!is_power_of_two(block_size)) {
         return NULL;
     }
     MEMORY_POOL_NAME *pool = calloc(1, sizeof(MEMORY_POOL_NAME));
@@ -306,7 +305,6 @@ bool MEMORY_POOL_FUNC(release)(MEMORY_POOL_NAME *pool, MEMORY_POOL_TYPE *value) 
 #undef MEMORY_POOL_TYPED
 #undef MEMORY_POOL_ARRAY_NAME
 #undef MEMORY_POOL_ARRAY_FUNC
-#undef IS_POWER_OF_TWO
 #ifdef MEMORY_POOL_MALLOC_DEFINED
 #undef MEMORY_POOL_MALLOC
 #undef MEMORY_POOL_MALLOC_DEFINED

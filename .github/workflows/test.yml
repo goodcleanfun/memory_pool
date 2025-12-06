@@ -73,6 +73,8 @@ jobs:
           curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps\threading\threading.h
           mkdir -p deps\aligned
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps\aligned\aligned.h
+          mkdir -p deps\bit_utils
+          curl -L https://raw.githubusercontent.com/goodcleanfun/bit_utils/refs/heads/main/src/bit_utils.h -o deps\bit_utils\bit_utils.h
           mkdir -p deps\cpu_relax
           curl -L https://raw.githubusercontent.com/goodcleanfun/cpu_relax/refs/heads/main/src/cpu_relax.h -o deps\cpu_relax\cpu_relax.h
           mkdir -p deps\spinlock
@@ -105,6 +107,8 @@ jobs:
           curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps/threading/threading.h
           mkdir -p deps/aligned
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps/aligned/aligned.h
+          mkdir -p deps/bit_utils
+          curl -L https://raw.githubusercontent.com/goodcleanfun/bit_utils/refs/heads/main/src/bit_utils.h -o deps/bit_utils/bit_utils.h
           mkdir -p deps/cpu_relax
           curl -L https://raw.githubusercontent.com/goodcleanfun/cpu_relax/refs/heads/main/src/cpu_relax.h -o deps/cpu_relax/cpu_relax.h
           mkdir -p deps/spinlock
