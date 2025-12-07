@@ -108,19 +108,19 @@ MEMORY_POOL_NAME *MEMORY_POOL_FUNC(new_size)(size_t block_size, size_t type_size
     if (!is_power_of_two(block_size)) {
         return NULL;
     }
-    MEMORY_POOL_NAME *pool = calloc(1, sizeof(MEMORY_POOL_NAME));
+    MEMORY_POOL_NAME *pool = MEMORY_POOL_CALLOC(1, sizeof(MEMORY_POOL_NAME));
     if (pool == NULL) return NULL;
 
     MEMORY_POOL_TYPED(block_t) *block = MEMORY_POOL_MALLOC(sizeof(MEMORY_POOL_TYPED(block_t)));
     if (block == NULL) {
-        free(pool);
+        MEMORY_POOL_FREE(pool);
         return NULL;
     }
 
     block->data = (MEMORY_POOL_TYPE *) MEMORY_POOL_ALIGNED_MALLOC(block_size * type_size, MEMORY_POOL_ALIGNMENT);
     if (block->data == NULL) {
         MEMORY_POOL_FREE(block);
-        free(pool);
+        MEMORY_POOL_FREE(pool);
         return NULL;
     }
 
