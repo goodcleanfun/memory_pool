@@ -69,20 +69,10 @@ jobs:
         run: |
           mkdir -p deps\greatest
           curl -L https://github.com/silentbicycle/greatest/raw/release/greatest.h -o deps\greatest\greatest.h
-          mkdir -p deps\threading
-          curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps\threading\threading.h
           mkdir -p deps\aligned
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps\aligned\aligned.h
           mkdir -p deps\bit_utils
           curl -L https://raw.githubusercontent.com/goodcleanfun/bit_utils/refs/heads/main/src/bit_utils.h -o deps\bit_utils\bit_utils.h
-          mkdir -p deps\cpu_relax
-          curl -L https://raw.githubusercontent.com/goodcleanfun/cpu_relax/refs/heads/main/src/cpu_relax.h -o deps\cpu_relax\cpu_relax.h
-          mkdir -p deps\spinlock
-          curl -L https://raw.githubusercontent.com/goodcleanfun/spinlock/refs/heads/main/src/spinlock.h -o deps\spinlock\spinlock.h
-          mkdir -p deps\set
-          curl -L https://raw.githubusercontent.com/goodcleanfun/set/refs/heads/main/src/set.h -o deps\set\set.h
-          mkdir -p deps\khash
-          curl -L https://raw.githubusercontent.com/attractivechaos/klib/refs/heads/master/khash.h -o deps\khash\khash.h
       - name: Run test with MSVC
         run: make CC=cl CFLAGS="/std:c11 /volatile:iso /experimental:c11atomics" test
 
@@ -103,20 +93,10 @@ jobs:
         run: |
           mkdir -p deps/greatest
           curl -L https://github.com/silentbicycle/greatest/raw/release/greatest.h -o deps/greatest/greatest.h
-          mkdir -p deps/threading
-          curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps/threading/threading.h
           mkdir -p deps/aligned
           curl -L https://raw.githubusercontent.com/goodcleanfun/aligned/refs/heads/main/src/aligned.h -o deps/aligned/aligned.h
           mkdir -p deps/bit_utils
           curl -L https://raw.githubusercontent.com/goodcleanfun/bit_utils/refs/heads/main/src/bit_utils.h -o deps/bit_utils/bit_utils.h
-          mkdir -p deps/cpu_relax
-          curl -L https://raw.githubusercontent.com/goodcleanfun/cpu_relax/refs/heads/main/src/cpu_relax.h -o deps/cpu_relax/cpu_relax.h
-          mkdir -p deps/spinlock
-          curl -L https://raw.githubusercontent.com/goodcleanfun/spinlock/refs/heads/main/src/spinlock.h -o deps/spinlock/spinlock.h
-          mkdir -p deps/set
-          curl -L https://raw.githubusercontent.com/goodcleanfun/set/refs/heads/main/src/set.h -o deps/set/set.h
-          mkdir -p deps/khash
-          curl -L https://raw.githubusercontent.com/attractivechaos/klib/refs/heads/master/khash.h -o deps/khash/khash.h
       - name: Build and Test with MinGW
         run: |
           make CC=gcc CFLAGS="-std=c11" LDFLAGS="-latomic" test
