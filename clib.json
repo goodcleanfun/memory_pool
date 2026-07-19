@@ -7,13 +7,10 @@
     "license": "MIT",
     "dependencies": {
       "goodcleanfun/aligned": "*",
-      "goodcleanfun/bit_utils": "*",
-      "goodcleanfun/threading": "*",
-      "goodcleanfun/spinlock": "*"
+      "goodcleanfun/bit_utils": "*"
     },
     "development": {
-      "silentbicycle/greatest": "*",
-      "goodcleanfun/set": "*"
+      "silentbicycle/greatest": "*"
     },
     "src": [
       "src/memory_pool.h"
